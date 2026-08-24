@@ -1,25 +1,38 @@
 .settings-window {
-  padding: 20px 24px;
-  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
-  color: #1d1d1f;
+  padding: 26px 28px;
+  font-family: var(--font-sans);
+  color: var(--text);
+  background: var(--bg);
+}
+
+.settings-title-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
 }
 
 .settings-window h1 {
-  font-size: 16px;
-  font-weight: 600;
+  font-size: 18px;
+  font-weight: 650;
+  letter-spacing: -0.01em;
   margin: 0 0 6px;
 }
 
 .settings-subtitle {
-  font-size: 12px;
-  color: #86868b;
-  margin: 0 0 16px;
-  line-height: 1.5;
+  font-size: 12.5px;
+  color: var(--text-secondary);
+  margin: 0 0 18px;
+  line-height: 1.6;
+  max-width: 440px;
+}
+
+.settings-emphasis {
+  font-weight: 600;
 }
 
 .settings-loading {
   padding: 24px;
-  color: #86868b;
+  color: var(--text-tertiary);
   font-size: 13px;
 }
 
@@ -30,38 +43,60 @@
 
 .settings-row {
   display: grid;
-  grid-template-columns: 1fr 70px 70px 90px;
+  grid-template-columns: 1fr 76px 76px 90px;
   align-items: center;
-  gap: 10px;
-  padding: 6px 0;
-  border-bottom: 1px solid #f2f2f7;
+  gap: 12px;
+  padding: 9px 4px;
+  border-bottom: 1px solid var(--card-border);
 }
 
 .settings-header {
-  font-size: 11px;
-  color: #86868b;
+  font-size: 10.5px;
+  font-weight: 700;
+  color: var(--text-tertiary);
   text-transform: uppercase;
-  letter-spacing: 0.03em;
-  border-bottom: 1px solid #e5e5ea;
-  padding-bottom: 8px;
+  letter-spacing: 0.06em;
+  border-bottom: 1px solid var(--border-strong);
+  padding-bottom: 10px;
+}
+
+.settings-header .hit-icon,
+.settings-header .depth-icon {
+  text-align: center;
 }
 
 .settings-name {
-  font-size: 13px;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  font-size: 13.5px;
+}
+
+.settings-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: currentColor;
+  flex-shrink: 0;
 }
 
 .settings-row input[type="number"] {
   width: 60px;
-  padding: 4px 6px;
-  border: 1px solid #d1d1d6;
-  border-radius: 5px;
-  font-size: 12px;
-  text-align: right;
+  padding: 5px 6px;
+  border: 1px solid var(--card-border);
+  border-radius: 7px;
+  background: var(--bg-inset);
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  font-weight: 600;
+  text-align: center;
+  color: var(--text);
 }
 
 .settings-row input[type="number"]:focus {
   outline: none;
-  border-color: #d85a30;
+  border-color: var(--hit);
+  box-shadow: 0 0 0 3px rgba(210, 96, 58, 0.14);
 }
 
 .settings-row-actions {
@@ -72,21 +107,90 @@
 }
 
 .saved-indicator {
+  display: flex;
+  align-items: center;
+  gap: 4px;
   font-size: 11px;
-  color: #1d9e75;
+  font-weight: 600;
+  color: var(--depth);
 }
 
 .reset-btn {
-  font-size: 11px;
-  padding: 4px 8px;
-  border-radius: 5px;
-  border: 1px solid #d1d1d6;
-  background: #fff;
+  width: 24px;
+  height: 24px;
+  padding: 0;
+  border-radius: 50%;
+  border: none;
+  background: none;
   cursor: pointer;
-  color: #48484a;
+  color: var(--text-tertiary);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.reset-btn:hover:not(:disabled) {
+  color: var(--text);
+  background: var(--bg-inset);
 }
 
 .reset-btn:disabled {
-  opacity: 0.35;
+  opacity: 0.3;
+  cursor: default;
+}
+
+.api-key-section {
+  margin-top: 20px;
+  padding-top: 16px;
+  border-top: 1px solid var(--card-border);
+}
+
+.api-key-section h2 {
+  font-size: 13px;
+  font-weight: 600;
+  margin: 0 0 4px;
+  color: var(--text);
+}
+
+.api-key-status {
+  font-size: 11px;
+  color: var(--text-secondary);
+  margin: 8px 0 6px;
+}
+
+.api-key-row {
+  display: flex;
+  gap: 6px;
+}
+
+.api-key-row input[type="password"] {
+  flex: 1;
+  padding: 7px 9px;
+  border: 1px solid var(--card-border);
+  border-radius: 8px;
+  background: var(--bg-inset);
+  font-size: 12px;
+  color: var(--text);
+}
+
+.api-key-row input[type="password"]:focus {
+  outline: none;
+  border-color: var(--hit);
+  box-shadow: 0 0 0 3px rgba(210, 96, 58, 0.14);
+}
+
+.api-key-row button {
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 6px 12px;
+  border-radius: 8px;
+  border: 1px solid var(--border-strong);
+  background: var(--bg);
+  cursor: pointer;
+  color: var(--text-secondary);
+}
+
+.api-key-row button:disabled {
+  opacity: 0.4;
   cursor: default;
 }

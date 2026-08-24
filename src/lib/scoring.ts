@@ -50,3 +50,9 @@ export function bandForRatio(ratio: number): StateBand {
   if (ratio < 0.7) return "amber";
   return "red";
 }
+
+/** Whether an activity type leans hit (quick-reward) or depth (sustained-value) —
+ * used to pick which accent color represents it in the UI. */
+export function isHitDominant(type: Pick<ActivityType, "hitRate" | "depthRate">): boolean {
+  return type.hitRate >= type.depthRate;
+}

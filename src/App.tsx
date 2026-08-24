@@ -5,6 +5,7 @@ import { QuickAdd } from "./components/QuickAdd";
 import { RecentEntries } from "./components/RecentEntries";
 import { TodaySummary } from "./components/TodaySummary";
 import { WeeklyChart } from "./components/WeeklyChart";
+import { SlidersIcon } from "./components/icons";
 import { getActivityTypes, getEntriesSince, getRecentEntries, initDb } from "./lib/db";
 import { checkNudge } from "./lib/logPipeline";
 import type { NudgeState } from "./lib/rollingWindow";
@@ -67,7 +68,10 @@ function App() {
       <TodaySummary today={today} />
       <WeeklyChart days={dailyTotals} />
       <RecentEntries entries={recentEntries} activityTypes={activityTypes} onChanged={refresh} />
-      <button className="settings-link" onClick={() => invoke("open_settings_window")}>Settings</button>
+      <button className="settings-link" onClick={() => invoke("open_settings_window")}>
+        <SlidersIcon size={13} />
+        Settings
+      </button>
     </div>
   );
 }

@@ -5,6 +5,7 @@
 // thing after copying this to your Mac -- Tauri's plugin APIs move fast
 // enough that something may have shifted since this was written.
 
+use std::process::Command;
 use std::sync::Mutex;
 use tauri::{
     tray::{TrayIconBuilder, TrayIconEvent},
@@ -15,6 +16,9 @@ use tauri_plugin_notification::NotificationExt;
 struct AppState {
     current_band: Mutex<String>,
 }
+
+const KEYCHAIN_SERVICE: &str = "com.sodikjon.dopaminetracker";
+const KEYCHAIN_ACCOUNT: &str = "google_api_key";
 
 /// Swaps the tray icon image between the three color states. Called from
 /// the frontend whenever the day's junk ratio crosses a band boundary.
@@ -82,13 +86,127 @@ fn open_settings_window(app: tauri::AppHandle) -> Result<(), String> {
         tauri::WebviewUrl::App("index.html?settings".into()),
     )
     .title("Dopamine tracker settings")
-    .inner_size(480.0, 520.0)
+    .inner_size(540.0, 580.0)
     .resizable(true)
     .decorations(true)
     .build()
     .map_err(|e| e.to_string())?;
 
     Ok(())
+
+}
+
+// ---Keychain-backed API key storage.----------
+// Delibrately shells out to the "security" CLI rather than pulling in a crate. 
+// The 'keyring' crate just went through a breaking v2 -> v3 change and is actively being split  into a 
+// separate 'keyring-core' crate as of this writing. exactly the kind of moving target that broke the tray incod code earlier,
+// 'security' has been a stable part fo macOS for decades and needs no dependency at all. 
+
+#[tauri::command]
+fn read_api_key() -> Result<String, String> {
+    let output = Command::new("security")
+    .args([
+        "find-generic-password",
+        "-a",
+        KEYCHAIN_ACCOUNT,
+        "-s",
+        KEYCHAIN_SERVICE,
+        "-w"
+    ])
+    .output()
+    .map_err(|e| format!("failed to run `security`: {e}"))?;
+
+    if !output.status.success() {
+        return Err("No API key saved yet -- add one in Settings".into());
+    }
+
+    Ok(String::from_utf8(output.stdout)
+    .map_err(|e| e.to_string())?
+    .trim()
+    .to_string())
+
+}
+
+// ---- LLM fallback parsing --------------------------------------------
+//
+// Runs entirely in Rust so the API key never enters the webview's JS
+// runtime -- if the fetch happened in JS after an `invoke('get_api_key')`
+// round trip, the raw key would sit in memory inspectable via the
+// webview's own devtools. This way it never leaves the Rust process.
+//
+// Uses Gemini rather than Claude, since the free tier doesn't need a
+// credit card. Google's free-tier model lineup rotates fairly often --
+// if MODEL below starts 404ing, check the current list at
+// https://ai.google.dev/gemini-api/docs/models and swap it in.
+
+#[derive(serde::Deserialize)]
+struct LlmParseResult {
+    #[serde(rename = "activityName")]
+    activity_name: Option<String>,
+    #[serde(rename = "durationMinutes")]
+    duration_minutes: Option<f64>,
+}
+
+#[tauri::command]
+async fn parse_with_llm_fallback(
+    raw_text: String,
+    category_names: Vec<String>,
+) -> Result<serde_json::Value, String> {
+    let api_key = read_api_key()?;
+
+    let system_prompt = format!(
+        "Extract an activity log from free text. Respond with ONLY raw JSON, no markdown \
+         fences, matching this shape: {{\"activityName\": string | null, \"durationMinutes\": \
+         number | null}}. activityName MUST be exactly one of: {}. If nothing matches, use \
+         null. If no duration is stated or inferable, use null.",
+        category_names.join(", ")
+    );
+
+    const MODEL: &str = "gemini-2.5-flash";
+    let url =
+        format!("https://generativelanguage.googleapis.com/v1beta/models/{MODEL}:generateContent");
+
+    let client = reqwest::Client::new();
+    let response = client
+        .post(&url)
+        // Header form, not ?key=... in the URL -- keeps the key out of
+        // server logs and any intermediary tooling that logs full URLs.
+        .header("x-goog-api-key", api_key)
+        .header("content-type", "application/json")
+        .json(&serde_json::json!({
+            "system_instruction": { "parts": [{ "text": system_prompt }] },
+            "contents": [{ "role": "user", "parts": [{ "text": raw_text }] }],
+            "generationConfig": {
+                "maxOutputTokens": 200,
+                // Forces raw JSON back, no markdown fences to strip.
+                "responseMimeType": "application/json"
+            }
+        }))
+        .send()
+        .await
+        .map_err(|e| format!("request failed: {e}"))?;
+
+    if !response.status().is_success() {
+        return Err(format!("Gemini API returned {}", response.status()));
+    }
+
+    let body: serde_json::Value = response.json().await.map_err(|e| e.to_string())?;
+
+    let text = body["candidates"]
+        .as_array()
+        .and_then(|c| c.first())
+        .and_then(|c| c["content"]["parts"].as_array())
+        .and_then(|parts| parts.first())
+        .and_then(|p| p["text"].as_str())
+        .ok_or("no text in Gemini response")?;
+
+    let parsed: LlmParseResult =
+        serde_json::from_str(text).map_err(|e| format!("model didn't return clean JSON: {e}"))?;
+
+    Ok(serde_json::json!({
+        "activityName": parsed.activity_name,
+        "durationMinutes": parsed.duration_minutes,
+    }))
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
@@ -137,7 +255,9 @@ pub fn run() {
             set_tray_icon_state,
             send_nudge_notification,
             open_settings_window,
-            toggle_popover
+            toggle_popover,
+            read_api_key,
+            parse_with_llm_fallback
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
