@@ -1,0 +1,147 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family: -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+  font-size: 13px;
+  color: #1d1d1f;
+  background: transparent;
+}
+
+.popover {
+  padding: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  background: #ffffff;
+}
+
+.loading {
+  padding: 24px;
+  text-align: center;
+  color: #86868b;
+}
+
+input[type="text"] {
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid #d1d1d6;
+  border-radius: 6px;
+  font-size: 13px;
+  outline: none;
+}
+
+input[type="text"]:focus {
+  border-color: #d85a30;
+}
+
+.error-text {
+  margin: 4px 0 0;
+  font-size: 11px;
+  color: #c92a2a;
+}
+
+.confirm-box {
+  padding: 8px 10px;
+  border: 1px solid #f0997b;
+  border-radius: 6px;
+  background: #faece7;
+}
+
+.confirm-text {
+  margin: 0 0 6px;
+  font-size: 12px;
+}
+
+.confirm-actions {
+  display: flex;
+  gap: 6px;
+}
+
+.confirm-actions button {
+  font-size: 12px;
+  padding: 4px 10px;
+  border-radius: 5px;
+  border: 1px solid #d1d1d6;
+  background: #fff;
+  cursor: pointer;
+}
+
+.today-summary-header {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: #48484a;
+  margin-bottom: 4px;
+}
+
+.today-summary-bar {
+  display: flex;
+  height: 6px;
+  border-radius: 3px;
+  overflow: hidden;
+  background: #e5e5ea;
+}
+
+.bar-hit {
+  background: #d85a30;
+}
+
+.bar-depth {
+  background: #1d9e75;
+}
+
+.today-summary-numbers {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  color: #86868b;
+  margin-top: 4px;
+}
+
+.weekly-chart-label {
+  font-size: 12px;
+  color: #48484a;
+  margin-bottom: 2px;
+}
+
+.recent-entries-label {
+  font-size: 12px;
+  color: #48484a;
+  margin-bottom: 4px;
+}
+
+.recent-entry-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 4px 0;
+  font-size: 12px;
+  border-bottom: 1px solid #f2f2f7;
+}
+
+.recent-entry-row button {
+  border: none;
+  background: none;
+  color: #86868b;
+  cursor: pointer;
+  font-size: 14px;
+  line-height: 1;
+}
+
+.recent-entries-empty {
+  font-size: 12px;
+  color: #86868b;
+}
+
+.settings-link {
+  align-self: flex-start;
+  border: none;
+  background: none;
+  color: #86868b;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0;
+}
