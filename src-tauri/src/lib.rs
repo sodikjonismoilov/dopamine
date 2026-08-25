@@ -9,6 +9,7 @@ use std::process::Command;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
 use tauri::{
+    path::BaseDirectory,
     tray::{TrayIconBuilder, TrayIconEvent},
     Manager,
 };
@@ -49,17 +50,37 @@ fn position_popover_under_tray(window: &tauri::WebviewWindow, tray_rect: &tauri:
 const KEYCHAIN_SERVICE: &str = "com.sodikjon.dopaminetracker";
 const KEYCHAIN_ACCOUNT: &str = "google_api_key";
 
+/// Resolves a tray icon's path against the app's bundled resource
+/// directory instead of the process's current working directory.
+///
+/// `Image::from_path("icons/tray-states/green.png")` only worked by
+/// accident during local `cargo run`/`tauri dev`, where the CWD happens
+/// to be `src-tauri/`. A double-clicked, packaged app is launched by
+/// Finder/launchd with an unrelated CWD (frequently `/`), so the bare
+/// relative path resolves to nothing -- `Image::from_path` errors, the
+/// `?` in `.setup()` propagates it, and Tauri panics during setup,
+/// taking the whole process down before any window ever appears. See
+/// the matching `"resources"` entry in tauri.conf.json that ships these
+/// files inside the bundle so this resolves to something real.
+fn tray_icon_path(app: &tauri::AppHandle, file_name: &str) -> tauri::Result<std::path::PathBuf> {
+    app.path().resolve(
+        format!("icons/tray-states/{file_name}"),
+        BaseDirectory::Resource,
+    )
+}
+
 /// Swaps the tray icon image between the three color states. Called from
 /// the frontend whenever the day's junk ratio crosses a band boundary.
 #[tauri::command]
 fn set_tray_icon_state(app: tauri::AppHandle, band: String) -> Result<(), String> {
-    let icon_path = match band.as_str() {
-        "green" => "icons/tray-states/green.png",
-        "amber" => "icons/tray-states/amber.png",
-        "red" => "icons/tray-states/red.png",
+    let file_name = match band.as_str() {
+        "green" => "green.png",
+        "amber" => "amber.png",
+        "red" => "red.png",
         other => return Err(format!("unknown band: {other}")),
     };
 
+    let icon_path = tray_icon_path(&app, file_name).map_err(|e| e.to_string())?;
     let icon = tauri::image::Image::from_path(icon_path).map_err(|e| e.to_string())?;
 
     if let Some(tray) = app.tray_by_id("main-tray") {
@@ -341,7 +362,7 @@ pub fn run() {
             #[cfg(target_os = "macos")]
             app.set_activation_policy(tauri::ActivationPolicy::Accessory);
 
-            let icon = tauri::image::Image::from_path("icons/tray-states/green.png")?;
+            let icon = tauri::image::Image::from_path(tray_icon_path(app.handle(), "green.png")?)?;
 
             TrayIconBuilder::with_id("main-tray")
                 .icon(icon)
