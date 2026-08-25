@@ -9,6 +9,7 @@ import "./SettingsWindow.css";
 function ApiKeySection() {
   const [hasKey, setHasKey] = useState<boolean | null>(null);
   const [input, setInput] = useState("");
+  const [error, setError] = useState<string | null>(null);
   const [status, setStatus] = useState<string | null>(null);
 
   const refresh = () => invoke<boolean>("has_api_key").then(setHasKey);
@@ -19,16 +20,26 @@ function ApiKeySection() {
 
   async function handleSave() {
     if (!input.trim()) return;
+    setError(null);
+    try {
     await invoke("save_api_key", { key: input.trim() });
     setInput(""); // never echo the key back once saved
     setStatus("Saved");
     setTimeout(() => setStatus(null), 1500);
     refresh();
+    } catch (err) {
+      setError(String(err));
+    }
   }
 
   async function handleDelete() {
+    setError(null);
+    try {
     await invoke("delete_api_key");
     refresh();
+    } catch (err) {
+      setError(String(err));
+    }
   }
 
   return (
@@ -61,6 +72,7 @@ function ApiKeySection() {
         )}
       </div>
       {status && <div className="saved-indicator">{status}</div>}
+      {error && <div className="api-key-error">{error}</div>}
     </div>
   );
 }

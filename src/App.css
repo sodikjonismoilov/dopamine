@@ -333,6 +333,54 @@ input[type="text"]::placeholder {
   padding: 0 2px 4px;
 }
 
+.recent-day-group + .recent-day-group {
+  margin-top: 4px;
+}
+
+.recent-day-header {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  width: 100%;
+  padding: 5px 4px;
+  border: none;
+  background: none;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: var(--text-secondary);
+  cursor: pointer;
+  border-radius: 6px;
+  transition: background 0.12s ease, color 0.12s ease;
+}
+
+.recent-day-header:hover {
+  background: var(--bg-inset);
+  color: var(--text);
+}
+
+.recent-day-chevron {
+  flex-shrink: 0;
+  color: var(--text-tertiary);
+  transition: transform 0.15s ease;
+}
+
+.recent-day-chevron.is-open {
+  transform: rotate(90deg);
+}
+
+.recent-day-label {
+  flex: 1;
+  text-align: left;
+}
+
+.recent-day-count {
+  font-family: var(--font-mono);
+  font-size: 10.5px;
+  font-weight: 400;
+  color: var(--text-tertiary);
+}
+
 .recent-entry-row {
   display: flex;
   justify-content: space-between;

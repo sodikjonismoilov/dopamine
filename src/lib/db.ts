@@ -164,12 +164,3 @@ export async function getEntriesSince(timestampMs: number): Promise<LogEntry[]> 
   );
   return rows.map(rowToLogEntry);
 }
-
-export async function getRecentEntries(limit: number): Promise<LogEntry[]> {
-  const db = await getDb();
-  const rows = await db.select<any[]>(
-    "SELECT * FROM log_entries ORDER BY timestamp_ms DESC LIMIT ?",
-    [limit]
-  );
-  return rows.map(rowToLogEntry);
-}

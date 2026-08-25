@@ -7,6 +7,7 @@
 
 use std::process::Command;
 use std::sync::Mutex;
+use std::time::{Duration, Instant};
 use tauri::{
     tray::{TrayIconBuilder, TrayIconEvent},
     Manager,
@@ -15,6 +16,34 @@ use tauri_plugin_notification::NotificationExt;
 
 struct AppState {
     current_band: Mutex<String>,
+    // Set whenever the popover auto-hides because it lost focus. The tray
+    // click handler checks this to tell "user clicked the tray icon to
+    // close the open popover" apart from "user clicked the tray icon to
+    // open it" -- see the comment on the click handler below for why that
+    // distinction needs an explicit flag instead of just `is_visible()`.
+    last_blur_hide_at: Mutex<Option<Instant>>,
+}
+
+/// Positions the popover directly under the tray icon before showing it,
+/// the way every other menu bar app does. Tauri doesn't do this on its
+/// own -- left alone, the window just reappears wherever it happened to
+/// be last (usually wherever macOS first placed it), which is why the
+/// popover looked "wrong" compared to a real menu bar app.
+fn position_popover_under_tray(window: &tauri::WebviewWindow, tray_rect: &tauri::Rect) {
+    let scale = window.scale_factor().unwrap_or(1.0);
+    let tray_pos = tray_rect.position.to_physical::<f64>(scale);
+    let tray_size = tray_rect.size.to_physical::<f64>(scale);
+    let window_size = window
+        .outer_size()
+        .unwrap_or(tauri::PhysicalSize::new(320, 480));
+
+    let x = tray_pos.x + tray_size.width / 2.0 - window_size.width as f64 / 2.0;
+    let y = tray_pos.y + tray_size.height;
+
+    let _ = window.set_position(tauri::Position::Physical(tauri::PhysicalPosition {
+        x: x as i32,
+        y: y as i32,
+    }));
 }
 
 const KEYCHAIN_SERVICE: &str = "com.sodikjon.dopaminetracker";
@@ -68,6 +97,7 @@ fn toggle_popover(app: tauri::AppHandle) -> Result<(), String> {
     }
     Ok(())
 }
+
 /// Opens the settings window, creating it on first call and just
 /// focusing it on subsequent calls. Unlike the popover, this is a normal
 /// decorated, resizable window -- editing 11 rate rows doesn't fit the
@@ -93,38 +123,125 @@ fn open_settings_window(app: tauri::AppHandle) -> Result<(), String> {
     .map_err(|e| e.to_string())?;
 
     Ok(())
-
 }
 
-// ---Keychain-backed API key storage.----------
-// Delibrately shells out to the "security" CLI rather than pulling in a crate. 
-// The 'keyring' crate just went through a breaking v2 -> v3 change and is actively being split  into a 
-// separate 'keyring-core' crate as of this writing. exactly the kind of moving target that broke the tray incod code earlier,
-// 'security' has been a stable part fo macOS for decades and needs no dependency at all. 
+// ---- Keychain-backed API key storage --------------------------------
+//
+// Deliberately shells out to the `security` CLI rather than pulling in a
+// crate. The `keyring` crate just went through a breaking v2 -> v3 change
+// and is actively being split into a separate `keyring-core` crate as of
+// this writing -- exactly the kind of moving target that broke the tray
+// icon code earlier. `security` has been a stable part of macOS for
+// decades and needs no dependency at all.
 
 #[tauri::command]
+fn save_api_key(key: String) -> Result<(), String> {
+    // -U updates the item in place if it already exists, so re-saving a
+    // replacement key doesn't fail with "the specified item already exists".
+    let output = Command::new("security")
+        .args([
+            "add-generic-password",
+            "-a",
+            KEYCHAIN_ACCOUNT,
+            "-s",
+            KEYCHAIN_SERVICE,
+            "-w",
+            &key,
+            "-U",
+        ])
+        .output()
+        .map_err(|e| format!("failed to run `security`: {e}"))?;
+
+    if output.status.success() {
+        Ok(())
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        Err(format!("Keychain save failed: {}", stderr.trim()))
+    }
+}
+
+#[tauri::command]
+fn has_api_key() -> bool {
+    let output = Command::new("security")
+        .args([
+            "find-generic-password",
+            "-a",
+            KEYCHAIN_ACCOUNT,
+            "-s",
+            KEYCHAIN_SERVICE,
+        ])
+        .output();
+
+    match output {
+        Ok(out) => {
+            if !out.status.success() {
+                // Not surfaced to the UI (a missing key isn't an error state),
+                // but printed here so it's visible in the `tauri dev` terminal
+                // if something other than "just doesn't exist yet" is wrong.
+                eprintln!(
+                    "has_api_key: security find-generic-password failed: {}",
+                    String::from_utf8_lossy(&out.stderr).trim()
+                );
+            }
+            out.status.success()
+        }
+        Err(e) => {
+            eprintln!("has_api_key: failed to run `security`: {e}");
+            false
+        }
+    }
+}
+
+#[tauri::command]
+fn delete_api_key() -> Result<(), String> {
+    let output = Command::new("security")
+        .args([
+            "delete-generic-password",
+            "-a",
+            KEYCHAIN_ACCOUNT,
+            "-s",
+            KEYCHAIN_SERVICE,
+        ])
+        .output()
+        .map_err(|e| format!("failed to run `security`: {e}"))?;
+
+    if output.status.success() {
+        Ok(())
+    } else {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        Err(format!("Keychain delete failed: {}", stderr.trim()))
+    }
+}
+
+/// Not exposed as a command -- internal helper for parse_with_llm_fallback.
+/// Deliberately NOT #[tauri::command] -- exposing this would let any JS in
+/// the webview call invoke('read_api_key') and get the raw key back in
+/// plain text, which defeats the entire point of doing the fetch in Rust.
 fn read_api_key() -> Result<String, String> {
     let output = Command::new("security")
-    .args([
-        "find-generic-password",
-        "-a",
-        KEYCHAIN_ACCOUNT,
-        "-s",
-        KEYCHAIN_SERVICE,
-        "-w"
-    ])
-    .output()
-    .map_err(|e| format!("failed to run `security`: {e}"))?;
+        .args([
+            "find-generic-password",
+            "-a",
+            KEYCHAIN_ACCOUNT,
+            "-s",
+            KEYCHAIN_SERVICE,
+            "-w",
+        ])
+        .output()
+        .map_err(|e| format!("failed to run `security`: {e}"))?;
 
     if !output.status.success() {
-        return Err("No API key saved yet -- add one in Settings".into());
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        return Err(format!(
+            "Couldn't read the API key from Keychain: {}",
+            stderr.trim()
+        ));
     }
 
     Ok(String::from_utf8(output.stdout)
-    .map_err(|e| e.to_string())?
-    .trim()
-    .to_string())
-
+        .map_err(|e| e.to_string())?
+        .trim()
+        .to_string())
 }
 
 // ---- LLM fallback parsing --------------------------------------------
@@ -217,6 +334,7 @@ pub fn run() {
         .plugin(tauri_plugin_notification::init())
         .manage(AppState {
             current_band: Mutex::new("green".to_string()),
+            last_blur_hide_at: Mutex::new(None),
         })
         .setup(|app| {
             // Menu bar apps shouldn't show a Dock icon or app switcher entry.
@@ -228,15 +346,60 @@ pub fn run() {
             TrayIconBuilder::with_id("main-tray")
                 .icon(icon)
                 .on_tray_icon_event(|tray, event| {
-                    if let TrayIconEvent::Click { .. } = event {
+                    if let TrayIconEvent::Click { rect, .. } = event {
                         let app = tray.app_handle();
                         if let Some(window) = app.get_webview_window("main") {
-                            let _ = window.show();
-                            let _ = window.set_focus();
+                            let state = app.state::<AppState>();
+
+                            // Clicking the tray icon while the popover is
+                            // open blurs the popover *before* this click
+                            // event reaches us -- the WindowEvent::Focused
+                            // (false) handler below fires first and hides
+                            // it. If we only checked `is_visible()` here
+                            // we'd see "already hidden" and immediately
+                            // reopen it, so clicking the icon to close the
+                            // popover would look like it did nothing. A
+                            // short-lived flag set by that blur handler
+                            // lets us recognize "this click is the one
+                            // that just closed it" and skip reopening.
+                            let just_closed_by_this_click = state
+                                .last_blur_hide_at
+                                .lock()
+                                .unwrap()
+                                .take()
+                                .is_some_and(|t| t.elapsed() < Duration::from_millis(250));
+
+                            if just_closed_by_this_click {
+                                return;
+                            }
+
+                            let currently_visible = window.is_visible().unwrap_or(false);
+                            if currently_visible {
+                                let _ = window.hide();
+                            } else {
+                                position_popover_under_tray(&window, &rect);
+                                let _ = window.show();
+                                let _ = window.set_focus();
+                            }
                         }
                     }
                 })
                 .build(app)?;
+
+            // Auto-hide the popover when it loses focus -- clicking
+            // anywhere outside it should close it, same as every other
+            // menu bar app. Without this, the only way to close it was
+            // the (also broken, now fixed) tray click toggle above.
+            if let Some(window) = app.get_webview_window("main") {
+                let window_for_blur = window.clone();
+                window.on_window_event(move |event| {
+                    if let tauri::WindowEvent::Focused(false) = event {
+                        let state = window_for_blur.state::<AppState>();
+                        *state.last_blur_hide_at.lock().unwrap() = Some(Instant::now());
+                        let _ = window_for_blur.hide();
+                    }
+                });
+            }
 
             // macOS requires explicit opt-in before any notification can be
             // delivered -- ask once, on first launch.
@@ -254,9 +417,11 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             set_tray_icon_state,
             send_nudge_notification,
-            open_settings_window,
             toggle_popover,
-            read_api_key,
+            open_settings_window,
+            save_api_key,
+            has_api_key,
+            delete_api_key,
             parse_with_llm_fallback
         ])
         .run(tauri::generate_context!())

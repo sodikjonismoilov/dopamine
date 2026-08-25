@@ -6,7 +6,7 @@ import { RecentEntries } from "./components/RecentEntries";
 import { TodaySummary } from "./components/TodaySummary";
 import { WeeklyChart } from "./components/WeeklyChart";
 import { SlidersIcon } from "./components/icons";
-import { getActivityTypes, getEntriesSince, getRecentEntries, initDb } from "./lib/db";
+import { getActivityTypes, getEntriesSince, initDb } from "./lib/db";
 import { checkNudge } from "./lib/logPipeline";
 import type { NudgeState } from "./lib/rollingWindow";
 import { aggregateByDay, bandForRatio } from "./lib/scoring";
@@ -18,14 +18,12 @@ function App() {
   const [ready, setReady] = useState(false);
   const [activityTypes, setActivityTypes] = useState<ActivityType[]>([]);
   const [weekEntries, setWeekEntries] = useState<LogEntry[]>([]);
-  const [recentEntries, setRecentEntries] = useState<LogEntry[]>([]);
   const [nudgeState] = useState<NudgeState>({ lastNudgeAtMs: null });
 
   const refresh = useCallback(async () => {
     const since = Date.now() - SEVEN_DAYS_MS;
-    const [entries, recent] = await Promise.all([getEntriesSince(since), getRecentEntries(8)]);
+    const entries = await getEntriesSince(since);
     setWeekEntries(entries);
-    setRecentEntries(recent);
 
     // Keep the tray icon's color in sync with today's band.
     const today = aggregateByDay(entries).find(
@@ -67,7 +65,7 @@ function App() {
       <QuickAdd activityTypes={activityTypes} onLogged={refresh} />
       <TodaySummary today={today} />
       <WeeklyChart days={dailyTotals} />
-      <RecentEntries entries={recentEntries} activityTypes={activityTypes} onChanged={refresh} />
+      <RecentEntries entries={weekEntries} activityTypes={activityTypes} onChanged={refresh} />
       <button className="settings-link" onClick={() => invoke("open_settings_window")}>
         <SlidersIcon size={13} />
         Settings

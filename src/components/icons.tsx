@@ -94,6 +94,24 @@ export function ResetIcon({ size = 13, className }: IconProps) {
   );
 }
 
+export function ChevronIcon({ size = 10, className }: IconProps) {
+  return (
+    <svg
+      viewBox="0 0 16 16"
+      width={size}
+      height={size}
+      fill="none"
+      stroke="currentColor"
+      strokeWidth={1.8}
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      className={className}
+    >
+      <path d="M5 3l6 5-6 5" />
+    </svg>
+  );
+}
+
 export function SlidersIcon({ size = 14, className }: IconProps) {
   return (
     <svg

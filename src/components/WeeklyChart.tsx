@@ -4,8 +4,14 @@ import type { DailyTotals } from "../lib/types";
 export function WeeklyChart({ days }: { days: DailyTotals[] }) {
   const chartData = days.map((d) => {
     const ratio = Math.round(d.junkRatio * 100);
+    // dateKey is a local "YYYY-MM-DD" string. `new Date(d.dateKey)` would
+    // parse that as UTC midnight, which shifts to the previous day once
+    // rendered back in a UTC-negative timezone -- off by one on the label.
+    // Building the Date from local y/m/d components instead keeps it in
+    // local time throughout.
+    const [year, month, day] = d.dateKey.split("-").map(Number);
     return {
-      label: new Date(d.dateKey).toLocaleDateString("en-US", { weekday: "short" }),
+      label: new Date(year, month - 1, day).toLocaleDateString("en-US", { weekday: "short" }),
       junk: ratio,
       rest: 100 - ratio,
     };
