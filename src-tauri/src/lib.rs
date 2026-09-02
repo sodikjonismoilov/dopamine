@@ -47,6 +47,41 @@ fn position_popover_under_tray(window: &tauri::WebviewWindow, tray_rect: &tauri:
     }));
 }
 
+/// Lets the popover appear over a *fullscreen* app (e.g. VS Code in native
+/// fullscreen), not just follow you between regular desktop Spaces.
+///
+/// tao's `Window::set_visible_on_all_workspaces()` only sets
+/// `NSWindowCollectionBehaviorCanJoinAllSpaces`. That's enough to make a
+/// window follow you across Desktop 1 / Desktop 2 / etc, but macOS still
+/// won't composite it over a Space that's occupied by *another app's*
+/// fullscreen window -- that additionally requires
+/// `NSWindowCollectionBehaviorFullScreenAuxiliary`, the same flag Spotlight,
+/// Notification Center, and menu bar utilities like Bartender use to render
+/// on top of fullscreen apps. tao/Tauri don't expose that flag through any
+/// public API, so this reaches into the raw NSWindow via `ns_window()` and
+/// sets it directly through objc2-app-kit (already in the dependency tree
+/// via tao, see Cargo.toml).
+///
+/// Without this, clicking the tray icon while another app owns the
+/// fullscreen Space calls `window.show()` successfully but the window
+/// never becomes visible -- from the user's perspective the app just
+/// silently "isn't opening".
+#[cfg(target_os = "macos")]
+fn apply_popover_collection_behavior(window: &tauri::WebviewWindow) {
+    use objc2_app_kit::NSWindowCollectionBehavior;
+
+    let Ok(ns_window_ptr) = window.ns_window() else {
+        return;
+    };
+    let ns_window: &objc2_app_kit::NSWindow = unsafe { &*ns_window_ptr.cast() };
+
+    ns_window.setCollectionBehavior(
+        NSWindowCollectionBehavior::CanJoinAllSpaces
+            | NSWindowCollectionBehavior::FullScreenAuxiliary
+            | NSWindowCollectionBehavior::Stationary,
+    );
+}
+
 const KEYCHAIN_SERVICE: &str = "com.sodikjon.dopaminetracker";
 const KEYCHAIN_ACCOUNT: &str = "google_api_key";
 
@@ -412,6 +447,9 @@ pub fn run() {
             // menu bar app. Without this, the only way to close it was
             // the (also broken, now fixed) tray click toggle above.
             if let Some(window) = app.get_webview_window("main") {
+                #[cfg(target_os = "macos")]
+                apply_popover_collection_behavior(&window);
+
                 let window_for_blur = window.clone();
                 window.on_window_event(move |event| {
                     if let tauri::WindowEvent::Focused(false) = event {

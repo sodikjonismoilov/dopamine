@@ -26,3 +26,12 @@ serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 reqwest = { version = "0.12", features = ["json"] }
 
+[target.'cfg(target_os = "macos")'.dependencies]
+# Pinned to what tauri/tao already pull in transitively (see Cargo.lock) so
+# this doesn't cause a second copy of either crate to be compiled. Needed
+# for NSWindowCollectionBehaviorFullScreenAuxiliary -- see the comment on
+# `apply_popover_collection_behavior` in lib.rs for why tao's
+# set_visible_on_all_workspaces() alone doesn't cover this.
+objc2 = "0.6"
+objc2-app-kit = { version = "0.3", features = ["NSWindow", "NSResponder"] }
+
